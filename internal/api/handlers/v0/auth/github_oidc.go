@@ -285,6 +285,16 @@ func (h *GitHubOIDCHandler) buildPermissions(claims *GitHubOIDCClaims) []auth.Pe
 		return nil
 	}
 
+	// Special case: External MCP server whitelist repo gets wildcard permissions to sync approved servers
+	// This allows the whitelist repo to republish approved servers from any namespace
+	if claims.RepositoryOwner == "paychex" && strings.Contains(claims.Subject, "external_mcp_server_whitelist") {
+		permissions = append(permissions, auth.Permission{
+			Action:          auth.PermissionActionPublish,
+			ResourcePattern: "*", // Wildcard: can publish any server
+		})
+		return permissions
+	}
+
 	// Grant publish permissions for the repository owner's namespace
 	// We grant io.github.<owner>/* rather than io.github./repo/* because many people have monorepo setups where they want to deploy multiple servers from
 	// This also reflects GitHub's permission model, in that GitHub Actions can push to any GitHub package in the repository owner's namespace (e.g. for GHCR)
