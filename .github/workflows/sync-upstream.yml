@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 2 * * *'  # Daily at 2 AM UTC
   workflow_dispatch:  # Allow manual trigger for testing
+  push:
+    branches:
+      - feat/AIA-1504  # Enable testing on feature branch
+    paths:
+      - '.github/workflows/sync-upstream.yml'  # Only trigger when workflow changes
 
 permissions:
   contents: write  # Required to push changes
