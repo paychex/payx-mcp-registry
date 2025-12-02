@@ -28,9 +28,9 @@ type GitHubOIDCTokenExchangeInput struct {
 // GitHubOIDCClaims represents the claims we need from a GitHub OIDC token
 type GitHubOIDCClaims struct {
 	jwt.RegisteredClaims
-	Repository string `json:"repository"`        // paychex/repo-name"
+	Repository      string `json:"repository"`       // paychex/repo-name"
 	RepositoryOwner string `json:"repository_owner"` // paychex
-	Ref string `json:"ref"`                  // refs/heads/main
+	Ref             string `json:"ref"`              // refs/heads/main
 }
 
 // JWKS represents a JSON Web Key Set
