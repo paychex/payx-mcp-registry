@@ -6,7 +6,7 @@ on:
   workflow_dispatch:  # Allow manual trigger for testing
   push:
     branches:
-      - feat/AIA-1504  # Enable testing on feature branch
+      - main
     paths:
       - '.github/workflows/sync-upstream.yml'  # Only trigger when workflow changes
 
@@ -158,9 +158,7 @@ jobs:
             --title "$PR_TITLE" \
             --body "$PR_BODY" \
             --base main \
-            --head "$SYNC_BRANCH" \
-            --label "upstream-sync" \
-            --label "automated"
+            --head "$SYNC_BRANCH"
           
           echo "✅ Pull request created"
       
