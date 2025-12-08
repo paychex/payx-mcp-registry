@@ -27,7 +27,7 @@ jobs:
       
       - name: Add upstream remote
         run: |
-          git remote add upstream https://github.com/modelcontextprotocol/registry.git || true
+          git remote add upstream https://github.com/modelcontextprotocol/registry.git 2>/dev/null || true
           git remote -v
       
       - name: Fetch upstream changes
@@ -52,76 +52,79 @@ jobs:
             echo "✅ Already up to date"
           fi
       
-      - name: Merge upstream changes
+      - name: Merge and push upstream changes
         if: steps.check_updates.outputs.has_updates == 'true'
+        id: merge
         run: |
-          set +e  # Don't exit on error
-          
           git checkout main
-          git merge upstream/main --no-edit
-          
-          if [ $? -eq 0 ]; then
-            echo "MERGE_SUCCESS=true" >> $GITHUB_ENV
-            echo "✅ Merge completed successfully"
-          else
-            echo "MERGE_SUCCESS=false" >> $GITHUB_ENV
-            echo "⚠️ Merge failed - likely conflicts"
+
+          # Attempt merge
+          if ! git merge upstream/main --no-edit; then
+            echo "status=conflict" >> $GITHUB_OUTPUT
+            echo "⚠️ Merge conflicts detected"
             git merge --abort
             exit 1
           fi
-      
-      - name: Push changes
-        if: steps.check_updates.outputs.has_updates == 'true' && env.MERGE_SUCCESS == 'true'
-        run: |
-          set +e  # Don't exit on error
-          
-          git push origin main
-          
-          if [ $? -eq 0 ]; then
-            echo "✅ Successfully synced with upstream"
-          else
+
+          # Attempt push
+          if ! git push origin main; then
+            echo "status=push_failed" >> $GITHUB_OUTPUT
             echo "⚠️ Push failed - likely due to workflow file restrictions"
-            echo "Creating sync branch instead..."
             
+            # Create branch for manual merge
             BRANCH_NAME="sync-upstream-$(date +%Y%m%d-%H%M%S)"
             git checkout -b "$BRANCH_NAME"
             git push origin "$BRANCH_NAME"
-            
-            echo "## ⚠️ Manual Merge Required" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Branch \`$BRANCH_NAME\` created with upstream changes." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Why:** GitHub prevents automatic updates to workflow files for security." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**To merge:**" >> $GITHUB_STEP_SUMMARY
-            echo "1. [Create PR from branch](${{ github.server_url }}/${{ github.repository }}/compare/main...$BRANCH_NAME)" >> $GITHUB_STEP_SUMMARY
-            echo "2. Review and merge" >> $GITHUB_STEP_SUMMARY
-            
-            exit 0  # Don't fail the workflow
+            echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+            exit 1
           fi
+
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "✅ Successfully synced with upstream"
       
-      - name: Summary
-        if: always()
+      - name: Success summary
+        if: steps.check_updates.outputs.has_updates == 'true' && steps.merge.outputs.status == 'success'
         run: |
-          echo "## Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Sync Successful" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ steps.check_updates.outputs.has_updates }}" == "true" ]; then
-            if [ "${{ env.MERGE_SUCCESS }}" == "true" ]; then
-              echo "✅ Successfully synced with upstream" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "⚠️ Merge conflicts detected - manual resolution needed" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "**To resolve:**" >> $GITHUB_STEP_SUMMARY
-              echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-              echo "git fetch upstream" >> $GITHUB_STEP_SUMMARY
-              echo "git merge upstream/main" >> $GITHUB_STEP_SUMMARY
-              echo "# Resolve conflicts, then:" >> $GITHUB_STEP_SUMMARY
-              echo "git add ." >> $GITHUB_STEP_SUMMARY
-              echo "git commit && git push" >> $GITHUB_STEP_SUMMARY
-              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "✅ Already up to date with upstream" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "Your fork has been successfully synced with \`modelcontextprotocol/registry\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Push failed summary
+        if: failure() && steps.merge.outputs.status == 'push_failed'
+        run: |
+          echo "## ⚠️ Manual Merge Required" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Push to main failed (likely workflow file changes)." >> $GITHUB_STEP_SUMMARY
+          echo "Branch \`${{ steps.merge.outputs.branch_name }}\` created with changes." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**To complete sync:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. [Create PR](${{ github.server_url }}/${{ github.repository }}/compare/main...${{ steps.merge.outputs.branch_name }})" >> $GITHUB_STEP_SUMMARY
+          echo "2. Review and merge" >> $GITHUB_STEP_SUMMARY
+
+      - name: Conflict summary
+        if: failure() && steps.merge.outputs.status == 'conflict'
+        run: |
+          echo "## ⚠️ Merge Conflicts Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Automatic sync failed due to merge conflicts." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### To resolve manually:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "git remote add upstream https://github.com/modelcontextprotocol/registry.git" >> $GITHUB_STEP_SUMMARY
+          echo "git fetch upstream" >> $GITHUB_STEP_SUMMARY
+          echo "git checkout main" >> $GITHUB_STEP_SUMMARY
+          echo "git merge upstream/main" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Resolve conflicts in your editor, then:" >> $GITHUB_STEP_SUMMARY
+          echo "git add ." >> $GITHUB_STEP_SUMMARY
+          echo "git commit" >> $GITHUB_STEP_SUMMARY
+          echo "git push origin main" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: No updates summary
+        if: steps.check_updates.outputs.has_updates == 'false'
+        run: |
+          echo "## ✅ Already Up to Date" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No new changes from upstream." >> $GITHUB_STEP_SUMMARY
           
