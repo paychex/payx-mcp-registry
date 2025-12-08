@@ -2,28 +2,23 @@ name: Sync with Upstream Registry
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # Daily at 2 AM UTC
-  workflow_dispatch:  # Allow manual trigger for testing
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/sync-upstream.yml'  # Only trigger when workflow changes
+    # - cron: '0 2 * * *'  # Daily at 2 AM UTC
+  workflow_dispatch:  # Allow manual trigger
 
 permissions:
-  contents: write  # Required to push changes
-  pull-requests: write  # Required to create PRs
+  contents: write
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    name: Sync with upstream
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch full history for proper sync
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
       
       - name: Configure git
         run: |
@@ -32,7 +27,7 @@ jobs:
       
       - name: Add upstream remote
         run: |
-          git remote add upstream https://github.com/modelcontextprotocol/registry.git || true
+          git remote add upstream https://github.com/modelcontextprotocol/registry.git 2>/dev/null || true
           git remote -v
       
       - name: Fetch upstream changes
@@ -43,137 +38,93 @@ jobs:
       - name: Check for updates
         id: check_updates
         run: |
-          # Get the latest commit from upstream main
           UPSTREAM_COMMIT=$(git rev-parse upstream/main)
           CURRENT_COMMIT=$(git rev-parse origin/main)
           
-          echo "Upstream commit: $UPSTREAM_COMMIT"
-          echo "Current commit: $CURRENT_COMMIT"
+          echo "Upstream: $UPSTREAM_COMMIT"
+          echo "Current:  $CURRENT_COMMIT"
           
           if [ "$UPSTREAM_COMMIT" != "$CURRENT_COMMIT" ]; then
-            echo "updates_available=true" >> $GITHUB_OUTPUT
+            echo "has_updates=true" >> $GITHUB_OUTPUT
             echo "✅ Updates available from upstream"
           else
-            echo "updates_available=false" >> $GITHUB_OUTPUT
-            echo "✅ Already up to date with upstream"
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "✅ Already up to date"
           fi
       
-      - name: Create sync branch
-        if: steps.check_updates.outputs.updates_available == 'true'
-        run: |
-          BRANCH_NAME="sync-upstream-$(date +%Y%m%d-%H%M%S)"
-          echo "SYNC_BRANCH=$BRANCH_NAME" >> $GITHUB_ENV
-          
-          git checkout -b "$BRANCH_NAME"
-          echo "Created branch: $BRANCH_NAME"
-      
-      - name: Merge upstream changes
-        if: steps.check_updates.outputs.updates_available == 'true'
+      - name: Merge and push upstream changes
+        if: steps.check_updates.outputs.has_updates == 'true'
         id: merge
         run: |
-          set +e  # Don't exit on error
-          
-          # Attempt to merge upstream/main into our sync branch
-          git merge upstream/main -m "Merge upstream changes from modelcontextprotocol/registry" \
-            --no-edit \
-            --allow-unrelated-histories
-          
-          MERGE_STATUS=$?
-          
-          if [ $MERGE_STATUS -eq 0 ]; then
-            echo "merge_status=success" >> $GITHUB_OUTPUT
-            echo "✅ Merge completed successfully"
-          else
-            echo "merge_status=conflicts" >> $GITHUB_OUTPUT
+          git checkout main
+
+          # Attempt merge
+          if ! git merge upstream/main --no-edit; then
+            echo "status=conflict" >> $GITHUB_OUTPUT
             echo "⚠️ Merge conflicts detected"
+            git merge --abort
+            exit 1
+          fi
+
+          # Attempt push
+          if ! git push origin main; then
+            echo "status=push_failed" >> $GITHUB_OUTPUT
+            echo "⚠️ Push failed - creating fallback branch"
             
-            # List conflicted files
-            echo "## Conflicted Files:" >> $GITHUB_STEP_SUMMARY
-            git diff --name-only --diff-filter=U | tee -a $GITHUB_STEP_SUMMARY
+            # Create branch for manual merge
+            BRANCH_NAME="sync-upstream-$(date +%Y%m%d-%H%M%S)"
+            git checkout -b "$BRANCH_NAME"
+            git push origin "$BRANCH_NAME"
+            echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+            exit 1
           fi
+
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "✅ Successfully synced with upstream"
       
-      - name: Push sync branch
-        if: steps.check_updates.outputs.updates_available == 'true'
+      - name: Success summary
+        if: steps.check_updates.outputs.has_updates == 'true' && steps.merge.outputs.status == 'success'
         run: |
-          git push origin "$SYNC_BRANCH"
-          echo "✅ Pushed branch: $SYNC_BRANCH"
-      
-      - name: Create Pull Request
-        if: steps.check_updates.outputs.updates_available == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Determine PR title and body based on merge status
-          if [ "${{ steps.merge.outputs.merge_status }}" == "success" ]; then
-            PR_TITLE="🔄 Sync with upstream registry"
-            PR_BODY="## Automated Upstream Sync
-          
-          This PR syncs changes from the [upstream modelcontextprotocol/registry](https://github.com/modelcontextprotocol/registry).
-          
-          ### ✅ Status
-          - Merge completed successfully with no conflicts
-          - Ready for review and merge
-          
-          ### 📋 Changes
-          Review the commits to see what's new from upstream.
-          
-          ### 🔍 Testing
-          - Verify that local development still works: \`make dev-compose\`
-          - Run tests: \`make test\`
-          - Check for any breaking changes in the commits
-          
-          ---
-          *Automatically generated by the sync-upstream workflow*"
-          else
-            PR_TITLE="🔄 Sync with upstream registry (⚠️ conflicts)"
-            PR_BODY="## Automated Upstream Sync - Manual Resolution Required
-          
-          This PR syncs changes from the [upstream modelcontextprotocol/registry](https://github.com/modelcontextprotocol/registry).
-          
-          ### ⚠️ Status
-          - Merge conflicts detected - manual resolution required
-          - See the workflow run for details on conflicted files
-          
-          ### 📋 To Resolve
-          \`\`\`bash
-          git fetch origin
-          git checkout $SYNC_BRANCH
-          # Resolve conflicts manually
-          git add .
-          git commit -m 'Resolve merge conflicts'
-          git push origin $SYNC_BRANCH
-          \`\`\`
-          
-          ### 🔍 Testing After Resolution
-          - Verify that local development still works: \`make dev-compose\`
-          - Run tests: \`make test\`
-          - Check for any breaking changes in the commits
-          
-          ---
-          *Automatically generated by the sync-upstream workflow*"
-          fi
-          
-          # Create the PR
-          gh pr create \
-            --title "$PR_TITLE" \
-            --body "$PR_BODY" \
-            --base main \
-            --head "$SYNC_BRANCH"
-          
-          echo "✅ Pull request created"
-      
-      - name: Summary
-        if: always()
-        run: |
-          echo "## Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Sync Successful" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ steps.check_updates.outputs.updates_available }}" == "true" ]; then
-            echo "- ✅ Updates were available from upstream" >> $GITHUB_STEP_SUMMARY
-            echo "- 🔀 Merge status: ${{ steps.merge.outputs.merge_status }}" >> $GITHUB_STEP_SUMMARY
-            echo "- 🌿 Branch created: \`$SYNC_BRANCH\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- ✅ Already up to date with upstream" >> $GITHUB_STEP_SUMMARY
-            echo "- No action needed" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "Your fork has been successfully synced with \`modelcontextprotocol/registry\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Push failed summary
+        if: failure() && steps.merge.outputs.status == 'push_failed'
+        run: |
+          echo "## ⚠️ Manual Merge Required" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Push to main failed (likely workflow file changes)." >> $GITHUB_STEP_SUMMARY
+          echo "Branch \`${{ steps.merge.outputs.branch_name }}\` created with changes." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**To complete sync:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. [Create PR](${{ github.server_url }}/${{ github.repository }}/compare/main...${{ steps.merge.outputs.branch_name }})" >> $GITHUB_STEP_SUMMARY
+          echo "2. Review and merge" >> $GITHUB_STEP_SUMMARY
+
+      - name: Conflict summary
+        if: failure() && steps.merge.outputs.status == 'conflict'
+        run: |
+          echo "## ⚠️ Merge Conflicts Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Automatic sync failed due to merge conflicts." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### To resolve manually:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "git remote add upstream https://github.com/modelcontextprotocol/registry.git" >> $GITHUB_STEP_SUMMARY
+          echo "git fetch upstream" >> $GITHUB_STEP_SUMMARY
+          echo "git checkout main" >> $GITHUB_STEP_SUMMARY
+          echo "git merge upstream/main" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Resolve conflicts in your editor, then:" >> $GITHUB_STEP_SUMMARY
+          echo "git add ." >> $GITHUB_STEP_SUMMARY
+          echo "git commit" >> $GITHUB_STEP_SUMMARY
+          echo "git push origin main" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: No updates summary
+        if: steps.check_updates.outputs.has_updates == 'false'
+        run: |
+          echo "## ✅ Already Up to Date" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No new changes from upstream." >> $GITHUB_STEP_SUMMARY
           
