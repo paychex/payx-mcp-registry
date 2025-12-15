@@ -363,6 +363,20 @@ func collectAvailableVariables(pkg *model.Package) []string {
 	return variables
 }
 
+// collectRemoteTransportVariables extracts available variable names from a remote transport
+func collectRemoteTransportVariables(transport *model.Transport) []string {
+	var variables []string
+
+	// Add variable names from the Variables map
+	for variableName := range transport.Variables {
+		if variableName != "" {
+			variables = append(variables, variableName)
+		}
+	}
+
+	return variables
+}
+
 // validatePackageTransport validates a package's transport with templating support
 func validatePackageTransport(transport *model.Transport, availableVariables []string) error {
 	// Validate transport type is supported
@@ -379,14 +393,14 @@ func validatePackageTransport(transport *model.Transport, availableVariables []s
 			return fmt.Errorf("url is required for %s transport type", transport.Type)
 		}
 		// Validate URL format with template variable support
-		if !IsValidTemplatedURL(transport.URL, availableVariables, true) {
+		if !IsValidTemplatedURL(transport.URL, availableVariables) {
 			// Check if it's a template variable issue or basic URL issue
 			templateVars := extractTemplateVariables(transport.URL)
 			if len(templateVars) > 0 {
 				return fmt.Errorf("%w: template variables in URL %s reference undefined variables. Available variables: %v",
-					ErrInvalidRemoteURL, transport.URL, availableVariables)
+					ErrInvalidPackageTransportURL, transport.URL, availableVariables)
 			}
-			return fmt.Errorf("%w: %s", ErrInvalidRemoteURL, transport.URL)
+			return fmt.Errorf("%w: %s", ErrInvalidPackageTransportURL, transport.URL)
 		}
 		return nil
 	default:
@@ -394,7 +408,7 @@ func validatePackageTransport(transport *model.Transport, availableVariables []s
 	}
 }
 
-// validateRemoteTransport validates a remote transport (no templating allowed)
+// validateRemoteTransport validates a remote transport with optional templating
 func validateRemoteTransport(obj *model.Transport) error {
 	// Validate transport type is supported - remotes only support streamable-http and sse
 	switch obj.Type {
@@ -403,7 +417,22 @@ func validateRemoteTransport(obj *model.Transport) error {
 		if obj.URL == "" {
 			return fmt.Errorf("url is required for %s transport type", obj.Type)
 		}
-		// Validate URL format (no templates allowed for remotes, no localhost)
+
+		// Collect available variables from the transport's Variables field
+		availableVariables := collectRemoteTransportVariables(obj)
+
+		// Validate URL format with template variable support
+		if !IsValidTemplatedURL(obj.URL, availableVariables) {
+			// Check if it's a template variable issue or basic URL issue
+			templateVars := extractTemplateVariables(obj.URL)
+			if len(templateVars) > 0 {
+				return fmt.Errorf("%w: template variables in URL %s reference undefined variables. Available variables: %v",
+					ErrInvalidRemoteURL, obj.URL, availableVariables)
+			}
+			return fmt.Errorf("%w: %s", ErrInvalidRemoteURL, obj.URL)
+		}
+
+		// Additional check: reject localhost URLs for remotes (like the old IsValidRemoteURL did)
 		if !IsValidRemoteURL(obj.URL) {
 			return fmt.Errorf("%w: %s", ErrInvalidRemoteURL, obj.URL)
 		}
