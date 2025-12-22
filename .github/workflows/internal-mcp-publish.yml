@@ -1,0 +1,95 @@
+name: Publish MCP Server (Internal)
+
+on:
+  workflow_call:
+    inputs:
+      server-json:
+        description: 'Path to server.json file (relative to repo root)'
+        type: string
+        required: false
+        default: 'server.json'
+      set-version-from-tag:
+        description: 'If true, extract version from git tag and update server.json'
+        type: boolean
+        required: false
+        default: false
+      mcp-publisher-version:
+        description: 'Version of mcp-publisher to use (e.g., v1.0.0, or "latest")'
+        type: string
+        required: false
+        default: 'latest'
+    outputs:
+      server-name:
+        description: 'The published server name'
+        value: ${{ jobs.publish.outputs.server-name }}
+      server-version:
+        description: 'The published version'
+        value: ${{ jobs.publish.outputs.server-version }}
+
+jobs:
+  publish:
+    name: Publish to Internal MCP Registry
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      server-name: ${{ steps.publish.outputs.name }}
+      server-version: ${{ steps.publish.outputs.version }}
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v4
+
+      - name: Set version from tag
+        if: ${{ inputs.set-version-from-tag }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION=${VERSION#v}
+          echo "📦 Setting version to: $VERSION"
+          jq --arg v "$VERSION" '.version = $v' "${{ inputs.server-json }}" > tmp.json
+          mv tmp.json "${{ inputs.server-json }}"
+
+      - name: Install mcp-publisher from internal fork
+        run: |
+          echo "📥 Downloading mcp-publisher from Paychex internal fork..."
+          # Detect platform
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+          # Determine download URL based on version
+          VERSION="${{ inputs.mcp-publisher-version }}"
+          if [[ "$VERSION" == "latest" ]]; then
+            DOWNLOAD_URL="https://github.com/paychex/payx-mcp-registry/releases/latest/download"
+          else
+            DOWNLOAD_URL="https://github.com/paychex/payx-mcp-registry/releases/download/$VERSION"
+          fi
+          TARBALL="mcp-publisher_${OS}_${ARCH}.tar.gz"
+          echo "   Platform: ${OS}/${ARCH}"
+          echo "   URL: $DOWNLOAD_URL/$TARBALL"
+          if ! curl -fsSL "$DOWNLOAD_URL/$TARBALL" | tar xz mcp-publisher; then
+            echo "❌ Download failed"
+            echo "Verify releases exist at: https://github.com/paychex/payx-mcp-registry/releases"
+            exit 1
+          fi
+          chmod +x mcp-publisher
+          ./mcp-publisher --version
+          echo "✅ mcp-publisher installed"
+
+      - name: Authenticate and publish
+        id: publish
+        env:
+          REGISTRY_URL: ${{ vars.MCP_REGISTRY_URL || secrets.MCP_REGISTRY_URL }}
+        run: |
+          if [[ -z "$REGISTRY_URL" ]]; then
+            echo "❌ MCP_REGISTRY_URL not configured"
+            exit 1
+          fi
+          echo "🔐 Authenticating to: $REGISTRY_URL"
+          ./mcp-publisher login github-oidc --registry "$REGISTRY_URL"
+          echo "🚀 Publishing ${{ inputs.server-json }}..."
+          ./mcp-publisher publish "${{ inputs.server-json }}"
+          # Extract metadata for outputs
+          NAME=$(jq -r '.name' "${{ inputs.server-json }}")
+          VERSION=$(jq -r '.version' "${{ inputs.server-json }}")
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "✅ Published $NAME v$VERSION"
