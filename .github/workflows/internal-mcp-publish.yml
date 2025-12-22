@@ -79,12 +79,39 @@ jobs:
         env:
           REGISTRY_URL: ${{ vars.MCP_REGISTRY_URL || secrets.MCP_REGISTRY_URL }}
         run: |
-          if [[ -z "$REGISTRY_URL" ]]; then
+          set -euo pipefail
+          echo "🧪 Workflow debug:"
+          echo "   Runner: $(uname -a)"
+          echo "   GITHUB_REF: ${GITHUB_REF}"
+          echo "   GITHUB_REF_TYPE: ${GITHUB_REF_TYPE:-unset}"
+
+          if [[ -z "${REGISTRY_URL}" ]]; then
             echo "❌ MCP_REGISTRY_URL not configured"
             exit 1
           fi
-          echo "🔐 Authenticating to: $REGISTRY_URL"
-          ./mcp-publisher login github-oidc --registry "$REGISTRY_URL"
+          echo "🌐 REGISTRY_URL: ${REGISTRY_URL}"
+          echo "🔎 Checking registry health..."
+          if ! curl -fsSL "${REGISTRY_URL}/v0/health" | jq -r '.status' | grep -q '^ok$'; then
+            echo "❌ Registry health check failed"
+            curl -i "${REGISTRY_URL}/v0/health" || true
+            exit 1
+          fi
+          echo "✅ Registry health: ok"
+
+          echo "🔐 Authenticating via GitHub OIDC..."
+          if [[ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]]; then echo "   ✔ ACTIONS_ID_TOKEN_REQUEST_URL present"; else echo "   ✖ ACTIONS_ID_TOKEN_REQUEST_URL missing"; fi
+          if [[ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then echo "   ✔ ACTIONS_ID_TOKEN_REQUEST_TOKEN present"; else echo "   ✖ ACTIONS_ID_TOKEN_REQUEST_TOKEN missing"; fi
+
+          # Attempt login; on failure, print diagnostics
+          if ! ./mcp-publisher login github-oidc --registry "${REGISTRY_URL}"; then
+            echo "❌ OIDC login failed"
+            echo "👉 Diagnostics:"
+            echo "   mcp-publisher version:" && ./mcp-publisher --version || true
+            echo "   Registry health (v0.1):" && curl -fsSL "${REGISTRY_URL}/v0.1/health" || true
+            exit 1
+          fi
+          echo "✅ OIDC login succeeded"
+
           echo "🚀 Publishing ${{ inputs.server-json }}..."
           ./mcp-publisher publish "${{ inputs.server-json }}"
           # Extract metadata for outputs
@@ -93,3 +120,6 @@ jobs:
           echo "name=$NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "✅ Published $NAME v$VERSION"
+
+          echo "📋 Post-publish check: list servers (top 10)"
+          curl -fsSL "${REGISTRY_URL}/v0.1/servers?limit=10" | jq '.' || true
