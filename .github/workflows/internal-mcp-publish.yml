@@ -102,18 +102,61 @@ jobs:
           if [[ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]]; then echo "   ✔ ACTIONS_ID_TOKEN_REQUEST_URL present"; else echo "   ✖ ACTIONS_ID_TOKEN_REQUEST_URL missing"; fi
           if [[ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then echo "   ✔ ACTIONS_ID_TOKEN_REQUEST_TOKEN present"; else echo "   ✖ ACTIONS_ID_TOKEN_REQUEST_TOKEN missing"; fi
 
-          # Attempt login; on failure, print diagnostics
-          if ! ./mcp-publisher login github-oidc --registry "${REGISTRY_URL}"; then
-            echo "❌ OIDC login failed"
-            echo "👉 Diagnostics:"
-            echo "   mcp-publisher version:" && ./mcp-publisher --version || true
-            echo "   Registry health (v0.1):" && curl -fsSL "${REGISTRY_URL}/v0.1/health" || true
-            exit 1
+          # Attempt login; on failure, try direct OIDC exchange + HTTP publish fallback
+          if ./mcp-publisher login github-oidc --registry "${REGISTRY_URL}"; then
+            echo "✅ OIDC login succeeded"
+            echo "🚀 Publishing ${{ inputs.server-json }} via mcp-publisher..."
+            if ! ./mcp-publisher publish "${{ inputs.server-json }}"; then
+              echo "⚠️ mcp-publisher publish failed; trying HTTP fallback"
+              FALLBACK=1
+            fi
+          else
+            echo "❌ OIDC login failed; switching to HTTP fallback"
+            FALLBACK=1
           fi
-          echo "✅ OIDC login succeeded"
 
-          echo "🚀 Publishing ${{ inputs.server-json }}..."
-          ./mcp-publisher publish "${{ inputs.server-json }}"
+          if [[ "${FALLBACK:-0}" == "1" ]]; then
+            echo "🔄 Performing HTTP fallback: direct OIDC exchange + publish"
+            # Get OIDC token from GitHub
+            if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
+              echo "❌ Missing GitHub OIDC environment; cannot perform fallback"
+              exit 1
+            fi
+            OIDC_URL="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=mcp-registry"
+            echo "   Requesting OIDC token from GitHub (audience=mcp-registry)"
+            OIDC_JSON=$(curl -fsSL -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" -H "Accept: application/json" "${OIDC_URL}")
+            OIDC_TOKEN=$(echo "${OIDC_JSON}" | jq -r '.value')
+            if [[ -z "${OIDC_TOKEN}" || "${OIDC_TOKEN}" == "null" ]]; then
+              echo "❌ Failed to obtain OIDC token from GitHub"
+              echo "Response: ${OIDC_JSON}"
+              exit 1
+            fi
+            echo "   ✔ Obtained OIDC token"
+
+            # Exchange OIDC token for registry JWT
+            echo "   Exchanging OIDC token with registry..."
+            EXCHANGE_JSON=$(curl -fsSL -X POST -H "Content-Type: application/json" -H "Accept: application/json" \
+              -d "{\"oidc_token\": \"${OIDC_TOKEN}\"}" "${REGISTRY_URL}/v0/auth/github-oidc")
+            REGISTRY_TOKEN=$(echo "${EXCHANGE_JSON}" | jq -r '.registry_token')
+            if [[ -z "${REGISTRY_TOKEN}" || "${REGISTRY_TOKEN}" == "null" ]]; then
+              echo "❌ Failed to exchange OIDC token with registry"
+              echo "Response: ${EXCHANGE_JSON}"
+              exit 1
+            fi
+            echo "   ✔ Obtained registry JWT"
+
+            # Publish via HTTP
+            echo "   Publishing via HTTP to ${REGISTRY_URL}/v0.1/publish"
+            HTTP_STATUS=$(curl -s -o publish_resp.json -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer ${REGISTRY_TOKEN}" -H "Content-Type: application/json" \
+              --data-binary "@${{ inputs.server-json }}" "${REGISTRY_URL}/v0.1/publish")
+            if [[ "${HTTP_STATUS}" != "200" ]]; then
+              echo "❌ HTTP publish failed (status ${HTTP_STATUS})"
+              echo "Response:" && cat publish_resp.json || true
+              exit 1
+            fi
+            echo "   ✔ HTTP publish succeeded"
+          fi
           # Extract metadata for outputs
           NAME=$(jq -r '.name' "${{ inputs.server-json }}")
           VERSION=$(jq -r '.version' "${{ inputs.server-json }}")
