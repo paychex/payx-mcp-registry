@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
@@ -17,24 +18,52 @@ import (
 	"github.com/modelcontextprotocol/registry/internal/telemetry"
 )
 
-// NulByteValidationMiddleware rejects requests containing NUL bytes in URL path or query parameters
-// This prevents PostgreSQL encoding errors and returns a proper 400 Bad Request
+// NulByteValidationMiddleware rejects requests containing NUL bytes in URL path or query parameters.
+// This prevents PostgreSQL encoding errors (SQLSTATE 22021) and returns a proper 400 Bad Request.
+// Checks for both literal NUL bytes (\x00) and URL-encoded form (%00).
 func NulByteValidationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check URL path for NUL bytes
-		if strings.ContainsRune(r.URL.Path, '\x00') {
-			http.Error(w, "Invalid request: URL path contains null bytes", http.StatusBadRequest)
+		// Check URL path for literal NUL bytes or URL-encoded %00
+		// Path needs %00 check because handlers call url.PathUnescape() which would decode it
+		if containsNulByte(r.URL.Path) {
+			writeErrorResponse(w, http.StatusBadRequest, "Invalid request: URL path contains null bytes")
 			return
 		}
 
-		// Check raw query string for NUL bytes
-		if strings.ContainsRune(r.URL.RawQuery, '\x00') {
-			http.Error(w, "Invalid request: query parameters contain null bytes", http.StatusBadRequest)
+		// Check raw query string for literal NUL bytes or URL-encoded %00
+		if containsNulByte(r.URL.RawQuery) {
+			writeErrorResponse(w, http.StatusBadRequest, "Invalid request: query parameters contain null bytes")
 			return
 		}
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// writeErrorResponse writes a JSON error response using huma's ErrorModel format
+// for consistency with the rest of the API.
+func writeErrorResponse(w http.ResponseWriter, status int, detail string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	errModel := &huma.ErrorModel{
+		Title:  http.StatusText(status),
+		Status: status,
+		Detail: detail,
+	}
+	_ = json.NewEncoder(w).Encode(errModel)
+}
+
+// containsNulByte checks if a string contains a NUL byte, either as a literal \x00
+// or URL-encoded as %00.
+func containsNulByte(s string) bool {
+	// Check for literal NUL byte
+	if strings.ContainsRune(s, '\x00') {
+		return true
+	}
+	// Check for URL-encoded NUL byte (%00)
+	// Using Contains directly since %00 has no case variation (both hex digits are 0)
+	return strings.Contains(s, "%00")
 }
 
 // TrailingSlashMiddleware redirects requests with trailing slashes to their canonical form
