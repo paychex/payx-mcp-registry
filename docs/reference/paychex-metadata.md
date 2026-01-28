@@ -12,20 +12,18 @@ All Paychex-specific metadata is stored under `io.github.paychex.payx-mcp-regist
 | `publish_date` | string | Yes | Publishing date (ISO 8601 format: YYYY-MM-DD) |
 | `ref_ticket` | string | Yes | Tracking ticket reference (JIRA/SNOW) |
 | `server_source` | string | Yes | Server origin - `internal` for Paychex-developed, `external` for third-party |
-| `external_source` | string | No | For external servers: specify source (e.g., `anthropic`, `langchain`, `github/user/repo`) |
-| `line_of_business` | string | Yes | Paychex line of business |
+| `external_source` | string | Yes (if external) | For external servers: specify source (e.g., `anthropic`, `langchain`, `github/user/repo`) |
+| `line_of_business` | string | Yes | Paychex line of business the server is published by|
 
 ### Field Details
 
 **server_source**: Indicates whether the server is developed internally or comes from external sources
 - `internal` - Developed and maintained by Paychex
-- `external` - Third-party server from public registries or vendors
+- `external` - Third-party server from public registries
 
 **external_source**: When `server_source` is `external`, this field specifies the origin:
-- Public vendor name (e.g., `anthropic`, `microsoft`)
-- Public registry source (e.g., official MCP registry)
+- Public registry source (e.g., anthropic, microsoft)
 - Repository location (e.g., `github/langchain-ai/langchain`)
-- Omit if not from a known public registry or vendor
 
 **Size Limit**: The entire metadata namespace is limited to 4KB.
 
@@ -49,7 +47,7 @@ All Paychex-specific metadata is stored under `io.github.paychex.payx-mcp-regist
 }
 ```
 
-### Example 2: External Vendor Server (From Anthropic)
+### Example 2: External Registry Server (From Anthropic)
 ```json
 {
   "name": "ai.anthropic/claude-toolkit",
@@ -91,9 +89,8 @@ All Paychex-specific metadata is stored under `io.github.paychex.payx-mcp-regist
 
 1. **Use the namespace**: Always place fields under `io.github.paychex.payx-mcp-registry/internal`
 2. **Stay under 4KB**: Keep metadata concise and relevant
-3. **Use specific vendor names**: For `server_source`, use vendor names like `anthropic`, `microsoft` instead of generic `external`
-4. **Document new fields**: If you add fields beyond the 5 core ones, document them for your team
-5. **Maintain compatibility**: Don't remove existing fields that might be in use
+3. **Use specific external registry names**: For `external_source`, use specific names like `anthropic`, `microsoft`
+4. **Maintain consistency**: Use defined _meta fields for tracking and governance
 
 ## Comparison with Official Registry
 
@@ -103,30 +100,5 @@ All Paychex-specific metadata is stored under `io.github.paychex.payx-mcp-regist
 | Data Type | `map[string]interface{}` | `map[string]interface{}` |
 | Size Limit | 4KB | 4KB |
 | Purpose | Build/CI metadata | Governance & tracking |
-| Preservation | Only this key preserved | Your fork, you control |
-
-## Migration from approved-mcp-servers.json
-
-Existing entries map to the new structure:
-
-| Old Field | New Location |
-|-----------|--------------|
-| `approved_by` | `io.github.paychex.payx-mcp-registry/internal.published_by` |
-| `approval_date` | `io.github.paychex.payx-mcp-registry/internal.publish_date` |
-| `jira_ticket` | `io.github.paychex.payx-mcp-registry/internal.ref_ticket` |
-| N/A | `io.github.paychex.payx-mcp-registry/internal.server_source` |
-| N/A | `io.github.paychex.payx-mcp-registry/internal.line_of_business` |
 
 See [examples/paychex-server-example.json](../examples/paychex-server-example.json) for a complete working example.
-
-## Why This Approach is Correct
-
-Based on the [official MCP registry documentation](https://github.com/modelcontextprotocol/registry):
-
-1. ✅ **Follows reverse DNS convention**: Like `io.modelcontextprotocol.registry/publisher-provided`
-2. ✅ **Uses flexible map structure**: `map[string]interface{}` allows any JSON
-3. ✅ **Enforces size limits**: 4KB limit prevents abuse
-4. ✅ **Namespace isolation**: No conflicts with official registry or future updates
-5. ✅ **Easy to extend**: Add fields without code changes
-
-This approach ensures your fork remains compatible with upstream changes while allowing custom internal metadata.
