@@ -676,8 +676,12 @@ func validateRegistryOwnership(ctx context.Context, req apiv0.ServerJSON) error 
 func validatePublisherExtensions(req apiv0.ServerJSON) error {
 	const maxExtensionSize = 4 * 1024 // 4KB limit
 
+	if req.Meta == nil {
+		return nil
+	}
+
 	// Check size limit for _meta publisher-provided extension
-	if req.Meta != nil && req.Meta.PublisherProvided != nil {
+	if req.Meta.PublisherProvided != nil {
 		extensionsJSON, err := json.Marshal(req.Meta.PublisherProvided)
 		if err != nil {
 			return fmt.Errorf("failed to marshal _meta.io.modelcontextprotocol.registry/publisher-provided extension: %w", err)
@@ -687,8 +691,33 @@ func validatePublisherExtensions(req apiv0.ServerJSON) error {
 		}
 	}
 
+	// Validate Paychex-specific metadata
+	if err := validatePaychexMetadata(req.Meta); err != nil {
+		return err
+	}
+
 	// Note: ServerJSON._meta only contains PublisherProvided data
 	// Official registry metadata is handled separately in the response structure
+
+	return nil
+}
+
+func validatePaychexMetadata(meta *apiv0.ServerMeta) error {
+	if meta == nil {
+		return nil
+	}
+
+	// Check size limit for Paychex internal metadata (similar to publisher-provided)
+	if meta.PaychexInternal != nil {
+		const maxExtensionSize = 4 * 1024 // 4KB limit
+		extensionsJSON, err := json.Marshal(meta.PaychexInternal)
+		if err != nil {
+			return fmt.Errorf("failed to marshal _meta.io.github.paychex.payx-mcp-registry/internal extension: %w", err)
+		}
+		if len(extensionsJSON) > maxExtensionSize {
+			return fmt.Errorf("_meta.io.github.paychex.payx-mcp-registry/internal extension exceeds 4KB limit (%d bytes)", len(extensionsJSON))
+		}
+	}
 
 	return nil
 }
