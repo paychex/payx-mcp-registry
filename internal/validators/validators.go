@@ -718,7 +718,7 @@ func validatePaychexMetadata(meta *apiv0.ServerMeta) error {
 			return fmt.Errorf("_meta.io.github.paychex.payx-mcp-registry/internal extension exceeds 4KB limit (%d bytes)", len(extensionsJSON))
 		}
 	}
-	
+
 	return nil
 }
 
