@@ -1,86 +1,42 @@
-# Paychex Internal Registry Metadata Fields
+# Paychex Internal Registry Metadata
 
-This document describes the Paychex-specific `_meta` fields used in the internal MCP registry.
+## Namespace
 
-## Overview
+All Paychex-specific metadata is stored under `io.github.paychex.payx-mcp-registry/internal` following the official MCP registry namespacing pattern.
 
-The Paychex MCP registry follows the official MCP registry pattern by using **reverse DNS namespacing** for custom metadata. All Paychex-specific fields are stored under the namespace `io.github.paychex.payx-mcp-registry/internal` as a flexible JSON object.
+## Metadata Fields
 
-## Namespace Convention
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `published_by` | string | Yes | Publisher username or email |
+| `publish_date` | string | Yes | Publishing date (ISO 8601 format: YYYY-MM-DD) |
+| `ref_ticket` | string | Yes | Tracking ticket reference (JIRA/SNOW) |
+| `server_source` | string | Yes | Server origin - `internal` for Paychex-developed, `external` for third-party |
+| `external_source` | string | No | For external servers: specify source (e.g., `anthropic`, `langchain`, `github/user/repo`) |
+| `line_of_business` | string | Yes | Paychex line of business |
 
-Following the official MCP registry pattern (which uses `io.modelcontextprotocol.registry/publisher-provided`), we use:
+### Field Details
 
+**server_source**: Indicates whether the server is developed internally or comes from external sources
+- `internal` - Developed and maintained by Paychex
+- `external` - Third-party server from public registries or vendors
+
+**external_source**: When `server_source` is `external`, this field specifies the origin:
+- Public vendor name (e.g., `anthropic`, `microsoft`)
+- Public registry source (e.g., official MCP registry)
+- Repository location (e.g., `github/langchain-ai/langchain`)
+- Omit if not from a known public registry or vendor
+
+**Size Limit**: The entire metadata namespace is limited to 4KB.
+
+## Examples
+
+### Example 1: Internal Paychex Server
 ```json
 {
-  "_meta": {
-    "io.github.paychex.payx-mcp-registry/internal": {
-      // Your custom fields here
-    }
-  }
-}
-```
-
-### Why Use Namespacing?
-
-1. **Compatibility**: Follows the official MCP registry pattern
-2. **No Conflicts**: Your fork won't conflict with official registry updates
-3. **Flexibility**: Store any JSON structure (not limited to predefined fields)
-4. **Future-Proof**: Easy to add/remove fields without schema changes
-
-## Field Reference
-
-All fields are stored as properties within `io.github.paychex.payx-mcp-registry/internal`:
-
-| Field | Type | Description | Example |
-|-------|------|-------------|---------|
-| `published_by` | string | Username or email of publisher | `"john.doe@paychex.com"` |
-| `publish_date` | string | ISO 8601 date of publishing | `"2026-01-27"` |
-| `ref_ticket` | string | Tracking ticket reference | `"AIA-1234"` |
-| `server_source` | string | Origin: `internal`, `external`, or vendor name | `"external"`, `"anthropic"` |
-| `line_of_business` | string | Line of business | `"AI & Automation"` |
-
-### Size Limit
-
-Like the official `publisher-provided` metadata, the `io.github.paychex.payx-mcp-registry/internal` namespace has a **4KB limit** to prevent abuse and ensure reasonable payload sizes.
-
-## Complete Examples
-
-### External Third-Party Server
-
-```json
-{
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "com.figma.mcp/mcp",
-  "description": "Official Figma MCP server for AI design workflows",
-  "version": "1.0.3",
-  "packages": [...],
-  
-  "_meta": {
-    "io.modelcontextprotocol.registry/publisher-provided": {
-      "tool": "npm-publisher",
-      "version": "1.0.1"
-    },
-    "io.github.paychex.payx-mcp-registry/internal": {
-      "published_by": "test-approver",
-      "publish_date": "2024-12-01",
-      "ref_ticket": "AIA-1503",
-      "server_source": "external",
-      "line_of_business": "AI & Automation"
-    }
-  }
-}
-```
-
-### Internal Paychex Server
-
-```json
-{
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.paychex.internal/payroll-assistant",
-  "description": "Internal MCP server for payroll processing assistance",
+  "description": "Internal MCP server for payroll processing",
   "version": "2.1.0",
-  "packages": [...],
-  
   "_meta": {
     "io.github.paychex.payx-mcp-registry/internal": {
       "published_by": "jane.smith@paychex.com",
@@ -93,59 +49,39 @@ Like the official `publisher-provided` metadata, the `io.github.paychex.payx-mcp
 }
 ```
 
-### Vendor Server (Anthropic)
-
+### Example 2: External Vendor Server (From Anthropic)
 ```json
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "ai.anthropic.mcp/claude-toolkit",
+  "name": "ai.anthropic/claude-toolkit",
   "description": "Anthropic's official Claude MCP toolkit",
   "version": "1.5.0",
-  "packages": [...],
-  
   "_meta": {
     "io.github.paychex.payx-mcp-registry/internal": {
       "published_by": "registry-admin@paychex.com",
       "publish_date": "2026-01-20",
       "ref_ticket": "AIA-2050",
-      "server_source": "anthropic",
+      "server_source": "external",
+      "external_source": "anthropic",
       "line_of_business": "AI & Automation"
     }
   }
 }
 ```
 
-## Publishing with Paychex Metadata
-
-When publishing a server to the internal Paychex registry:
-
-```bash
-# Using the mcp-publisher CLI
-./bin/mcp-publisher publish server.json
-```
-
-The registry validates:
-- The `io.github.paychex.payx-mcp-registry/internal` object doesn't exceed 4KB
-- JSON structure is valid
-- All required server fields are present
-
-## Extending the Metadata
-
-Since the namespace stores a flexible JSON object, you can easily add new fields without code changes:
-
+### Example 3: External Third-Party Server (Not in Public Registry)
 ```json
 {
+  "name": "com.langchain.mcp/docs",
+  "description": "LangChain documentation MCP server",
+  "version": "1.0.0",
   "_meta": {
     "io.github.paychex.payx-mcp-registry/internal": {
-      "published_by": "...",
-      "publish_date": "...",
-      "ref_ticket": "...",
-      "server_source": "...",
-      "line_of_business": "...",
-      // New fields can be added anytime
-      "security_scan_date": "2026-01-20",
-      "compliance_tags": ["SOX", "PCI"],
-      "approval_chain": ["manager", "security", "compliance"]
+      "published_by": "dev-team@paychex.com",
+      "publish_date": "2024-12-01",
+      "ref_ticket": "AIA-1503",
+      "server_source": "external",
+      "external_source": "github/langchain-ai/langchain",
+      "line_of_business": "IS"
     }
   }
 }
