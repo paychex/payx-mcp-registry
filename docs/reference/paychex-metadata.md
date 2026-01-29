@@ -12,7 +12,7 @@ All Paychex-specific metadata is stored under `io.github.paychex.payx-mcp-regist
 | `publish_date` | string | Yes | Publishing date (ISO 8601 format: YYYY-MM-DD) |
 | `ref_ticket` | string | Yes | Tracking ticket reference (JIRA/SNOW) |
 | `server_source` | string | Yes | Server origin - `internal` for Paychex-developed, `external` for third-party |
-| `external_source` | string | Yes (if external) | For external servers: specify source (e.g., `anthropic`, `langchain`, `github/user/repo`) |
+| `external_source` | string | No | For external servers, specify source (e.g., `anthropic`, `langchain`, `github/user/repo`) |
 | `line_of_business` | string | Yes | Paychex line of business the server is published by|
 
 ### Field Details
@@ -21,7 +21,7 @@ All Paychex-specific metadata is stored under `io.github.paychex.payx-mcp-regist
 - `internal` - Developed and maintained by Paychex
 - `external` - Third-party server from public registries
 
-**external_source**: When `server_source` is `external`, this field specifies the origin:
+**external_source**: When `server_source` is `external`, this field must specify the origin:
 - Public registry source (e.g., anthropic, microsoft)
 - Repository location (e.g., `github/langchain-ai/langchain`)
 
