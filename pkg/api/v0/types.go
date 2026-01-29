@@ -28,9 +28,7 @@ type ServerListResponse struct {
 }
 
 type ServerMeta struct {
-	PublisherProvided map[string]interface{} `json:"io.modelcontextprotocol.registry/publisher-provided,omitempty" doc:"Publisher-provided metadata for downstream registries"`
-	// Paychex internal registry metadata - using reverse DNS namespace based on GitHub location
-	PaychexInternal map[string]interface{} `json:"io.github.paychex.payx-mcp-registry/internal,omitempty" doc:"Paychex internal registry metadata for governance and classification"`
+	PublisherProvided map[string]interface{} `json:"io.modelcontextprotocol.registry/publisher-provided,omitempty" doc:"Publisher-provided metadata for downstream registries (includes nested 'paychex' object for Paychex governance)"`
 }
 
 type ServerJSON struct {

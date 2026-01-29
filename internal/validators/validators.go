@@ -708,20 +708,33 @@ func validatePublisherExtensions(req apiv0.ServerJSON) error {
 }
 
 func validatePaychexMetadata(meta *apiv0.ServerMeta) error {
-	if meta == nil || meta.PaychexInternal == nil {
-		return fmt.Errorf("_meta.io.github.paychex.payx-mcp-registry/internal is required for all servers")
+	// Extract Paychex metadata from publisher-provided namespace
+	var paychexData map[string]interface{}
+	
+	if meta == nil || meta.PublisherProvided == nil {
+		return fmt.Errorf("_meta.io.modelcontextprotocol.registry/publisher-provided is required")
+	}
+	
+	paychexRaw, exists := meta.PublisherProvided["paychex"]
+	if !exists {
+		return fmt.Errorf("_meta.io.modelcontextprotocol.registry/publisher-provided.paychex is required for all servers")
+	}
+	
+	paychexData, ok := paychexRaw.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("paychex metadata must be an object")
 	}
 
 	// Required fields for Paychex governance
 	requiredFields := []string{"published_by", "publish_date", "ref_ticket", "server_source", "line_of_business"}
 	for _, field := range requiredFields {
-		if _, exists := meta.PaychexInternal[field]; !exists {
+		if _, exists := paychexData[field]; !exists {
 			return fmt.Errorf("required field '%s' missing in Paychex metadata", field)
 		}
 	}
 
 	// Validate server_source field
-	serverSource, ok := meta.PaychexInternal["server_source"].(string)
+	serverSource, ok := paychexData["server_source"].(string)
 	if !ok {
 		return fmt.Errorf("server_source must be a string")
 	}
@@ -731,12 +744,12 @@ func validatePaychexMetadata(meta *apiv0.ServerMeta) error {
 
 	// Check size limit for Paychex internal metadata
 	const maxExtensionSize = 4 * 1024 // 4KB limit
-	extensionsJSON, err := json.Marshal(meta.PaychexInternal)
+	extensionsJSON, err := json.Marshal(paychexData)
 	if err != nil {
-		return fmt.Errorf("failed to marshal _meta.io.github.paychex.payx-mcp-registry/internal extension: %w", err)
+		return fmt.Errorf("failed to marshal paychex metadata: %w", err)
 	}
 	if len(extensionsJSON) > maxExtensionSize {
-		return fmt.Errorf("_meta.io.github.paychex.payx-mcp-registry/internal extension exceeds 4KB limit (%d bytes)", len(extensionsJSON))
+		return fmt.Errorf("paychex metadata exceeds 4KB limit (%d bytes)", len(extensionsJSON))
 	}
 
 	return nil
