@@ -34,14 +34,14 @@
       "build_info": {
         "timestamp": "2026-01-15T14:30:00Z",
         "build_number": "123"
+      },
+      "paychex": {
+        "published_by": "devops-team@example.com",
+        "publish_date": "2026-01-15",
+        "ref_ticket": "PROJ-1234",
+        "server_source": "internal",
+        "line_of_business": "Engineering - Platform"
       }
-    },
-    "io.github.paychex.payx-mcp-registry/internal": {
-      "published_by": "devops-team@example.com",
-      "publish_date": "2026-01-15",
-      "ref_ticket": "PROJ-1234",
-      "server_source": "internal",
-      "line_of_business": "Engineering - Platform"
     }
   }
 }

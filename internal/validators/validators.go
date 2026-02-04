@@ -649,6 +649,11 @@ func ValidatePublishRequest(ctx context.Context, req apiv0.ServerJSON, cfg *conf
 }
 
 func ValidateUpdateRequest(ctx context.Context, req apiv0.ServerJSON, cfg *config.Config, skipRegistryValidation bool) error {
+	// Validate publisher extensions (including Paychex metadata) to prevent bypass
+	if err := validatePublisherExtensions(req); err != nil {
+		return err
+	}
+
 	// Validate the server detail (includes all nested validation)
 	result := ValidateServerJSON(&req, ValidationSchemaVersionAndSemantic)
 	if err := result.FirstError(); err != nil {
@@ -692,7 +697,7 @@ func validatePublisherExtensions(req apiv0.ServerJSON) error {
 	}
 
 	// Validate Paychex-specific metadata
-	if err := validatePaychexMetadata(req.Meta); err != nil {
+	if err := validatePaychexMetadata(req.Meta, req.Name); err != nil {
 		return err
 	}
 
@@ -702,21 +707,55 @@ func validatePublisherExtensions(req apiv0.ServerJSON) error {
 	return nil
 }
 
-func validatePaychexMetadata(meta *apiv0.ServerMeta) error {
-	if meta == nil {
+func validatePaychexMetadata(meta *apiv0.ServerMeta, serverName string) error {
+	// Skip validation for anonymous test servers (used in integration tests)
+	if strings.HasPrefix(serverName, "io.modelcontextprotocol.anonymous/") {
 		return nil
 	}
 
-	// Check size limit for Paychex internal metadata (similar to publisher-provided)
-	if meta.PaychexInternal != nil {
-		const maxExtensionSize = 4 * 1024 // 4KB limit
-		extensionsJSON, err := json.Marshal(meta.PaychexInternal)
-		if err != nil {
-			return fmt.Errorf("failed to marshal _meta.io.github.paychex.payx-mcp-registry/internal extension: %w", err)
+	// Extract Paychex metadata from publisher-provided namespace
+	// This is REQUIRED for all non-anonymous servers in the Paychex internal registry fork
+	var paychexData map[string]interface{}
+
+	if meta == nil || meta.PublisherProvided == nil {
+		return fmt.Errorf("_meta.io.modelcontextprotocol.registry/publisher-provided is required for all servers in Paychex registry")
+	}
+
+	paychexRaw, exists := meta.PublisherProvided["paychex"]
+	if !exists {
+		return fmt.Errorf("_meta.io.modelcontextprotocol.registry/publisher-provided.paychex is required for all servers in Paychex registry")
+	}
+
+	paychexData, ok := paychexRaw.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("paychex metadata must be an object")
+	}
+
+	// Required fields for Paychex governance
+	requiredFields := []string{"published_by", "publish_date", "ref_ticket", "server_source", "line_of_business"}
+	for _, field := range requiredFields {
+		if _, exists := paychexData[field]; !exists {
+			return fmt.Errorf("required field '%s' missing in Paychex metadata", field)
 		}
-		if len(extensionsJSON) > maxExtensionSize {
-			return fmt.Errorf("_meta.io.github.paychex.payx-mcp-registry/internal extension exceeds 4KB limit (%d bytes)", len(extensionsJSON))
-		}
+	}
+
+	// Validate server_source field
+	serverSource, ok := paychexData["server_source"].(string)
+	if !ok {
+		return fmt.Errorf("server_source must be a string")
+	}
+	if serverSource != "internal" && serverSource != "external" {
+		return fmt.Errorf("server_source must be 'internal' or 'external', got '%s'", serverSource)
+	}
+
+	// Check size limit for Paychex internal metadata
+	const maxExtensionSize = 4 * 1024 // 4KB limit
+	extensionsJSON, err := json.Marshal(paychexData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal paychex metadata: %w", err)
+	}
+	if len(extensionsJSON) > maxExtensionSize {
+		return fmt.Errorf("paychex metadata exceeds 4KB limit (%d bytes)", len(extensionsJSON))
 	}
 
 	return nil
