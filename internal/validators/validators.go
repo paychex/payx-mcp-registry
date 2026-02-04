@@ -709,17 +709,18 @@ func validatePublisherExtensions(req apiv0.ServerJSON) error {
 
 func validatePaychexMetadata(meta *apiv0.ServerMeta) error {
 	// Extract Paychex metadata from publisher-provided namespace
+	// This is REQUIRED for the Paychex internal registry fork
 	var paychexData map[string]interface{}
-	
+
 	if meta == nil || meta.PublisherProvided == nil {
-		return fmt.Errorf("_meta.io.modelcontextprotocol.registry/publisher-provided is required")
+		return fmt.Errorf("_meta.io.modelcontextprotocol.registry/publisher-provided is required for all servers in Paychex registry")
 	}
-	
+
 	paychexRaw, exists := meta.PublisherProvided["paychex"]
 	if !exists {
-		return fmt.Errorf("_meta.io.modelcontextprotocol.registry/publisher-provided.paychex is required for all servers")
+		return fmt.Errorf("_meta.io.modelcontextprotocol.registry/publisher-provided.paychex is required for all servers in Paychex registry")
 	}
-	
+
 	paychexData, ok := paychexRaw.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("paychex metadata must be an object")
