@@ -748,14 +748,15 @@ func validatePaychexMetadata(meta *apiv0.ServerMeta, serverName string) error {
 		return fmt.Errorf("server_source must be 'internal' or 'external', got '%s'", serverSource)
 	}
 
-	// Check size limit for Paychex internal metadata
+	// Check size limit for entire publisher-provided namespace
+	// This ensures the entire metadata namespace stays under 4KB as documented
 	const maxExtensionSize = 4 * 1024 // 4KB limit
-	extensionsJSON, err := json.Marshal(paychexData)
+	extensionsJSON, err := json.Marshal(meta.PublisherProvided)
 	if err != nil {
-		return fmt.Errorf("failed to marshal paychex metadata: %w", err)
+		return fmt.Errorf("failed to marshal publisher-provided metadata: %w", err)
 	}
 	if len(extensionsJSON) > maxExtensionSize {
-		return fmt.Errorf("paychex metadata exceeds 4KB limit (%d bytes)", len(extensionsJSON))
+		return fmt.Errorf("publisher-provided metadata exceeds 4KB limit (%d bytes)", len(extensionsJSON))
 	}
 
 	return nil
