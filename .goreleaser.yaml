@@ -86,8 +86,8 @@ sboms:
 # This section defines the release policy.
 release:
   github:
-    owner: modelcontextprotocol
-    name: registry
+    owner: paychex
+    name: payx-mcp-registry
 
 # This section defines how and which artifacts we want to sign for the release.
 signs:

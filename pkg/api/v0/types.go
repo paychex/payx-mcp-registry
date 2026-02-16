@@ -28,7 +28,7 @@ type ServerListResponse struct {
 }
 
 type ServerMeta struct {
-	PublisherProvided map[string]interface{} `json:"io.modelcontextprotocol.registry/publisher-provided,omitempty" doc:"Publisher-provided metadata for downstream registries"`
+	PublisherProvided map[string]interface{} `json:"io.modelcontextprotocol.registry/publisher-provided,omitempty" doc:"Publisher-provided metadata for downstream registries (includes nested 'paychex' object for Paychex governance)"`
 }
 
 type ServerJSON struct {
