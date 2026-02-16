@@ -76,17 +76,22 @@ jobs:
             git push -f origin "$BRANCH_NAME"
 
             # Check if a sync PR already exists
-            EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --base main --json number --jq '.[0].number')
+            EXISTING_PR=$(gh pr list \
+              --repo "${{ github.repository }}" \
+              --head "$BRANCH_NAME" \
+              --base main \
+              --json number \
+              --jq '.[0].number' 2>&1 || true)
 
-            if [ -n "$EXISTING_PR" ]; then
+            if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
               echo "status=pr_exists" >> $GITHUB_OUTPUT
               echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
               echo "ℹ️ Sync PR #$EXISTING_PR already exists — branch updated"
             else
-
-              PR_BODY="## Automated upstream sync\n\nThis PR brings in the latest changes from [\`modelcontextprotocol/registry\`](https://github.com/modelcontextprotocol/registry).\n\n**There are merge conflicts that need manual resolution.**\n\n### To resolve locally:\n\n\`\`\`bash\ngit fetch origin\ngit checkout sync/upstream-$(date +%Y%m%d)\ngit merge main\n# Resolve conflicts, then:\ngit add .\ngit commit\ngit push\n\`\`\`\n\nOr resolve directly in the GitHub UI using the conflict editor."
+              PR_BODY="## Automated upstream sync\n\nThis PR brings in the latest changes from [\`modelcontextprotocol/registry\`](https://github.com/modelcontextprotocol/registry).\n\n**There are merge conflicts that need manual resolution.**\n\n### To resolve locally:\n\n\`\`\`bash\ngit fetch origin\ngit checkout $BRANCH_NAME\ngit merge main\n# Resolve conflicts, then:\ngit add .\ngit commit\ngit push\n\`\`\`\n\nOr resolve directly in the GitHub UI using the conflict editor."
               
               if PR_URL=$(gh pr create \
+                --repo "${{ github.repository }}" \
                 --title "Sync with upstream $(date +%Y-%m-%d)" \
                 --body "$PR_BODY" \
                 --base main \
@@ -97,8 +102,8 @@ jobs:
               else
                 echo "status=branch_created" >> $GITHUB_OUTPUT
                 echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-                echo "⚠️ Branch created but PR creation failed (likely token permissions)"
-                echo "⚠️ Create PR manually: https://github.com/${{ github.repository }}/pull/new/$BRANCH_NAME"
+                echo "⚠️ Branch created but PR creation failed: $PR_URL"
+                echo "⚠️ Create PR manually: https://github.com/${{ github.repository }}/compare/main...$BRANCH_NAME?expand=1"
               fi
             fi
             
@@ -106,7 +111,7 @@ jobs:
             exit 0
           fi
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Summary
         if: always()
@@ -133,9 +138,10 @@ jobs:
             echo "Merge conflicts detected. Branch \`${{ steps.sync.outputs.branch_name }}\` created." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Action required:** Create PR manually at:" >> $GITHUB_STEP_SUMMARY
-            echo "https://github.com/${{ github.repository }}/pull/new/${{ steps.sync.outputs.branch_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "https://github.com/${{ github.repository }}/compare/main...${{ steps.sync.outputs.branch_name }}?expand=1" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "_Note: Automatic PR creation failed due to token permissions_" >> $GITHUB_STEP_SUMMARY
+            echo "**Note:** Automatic PR creation failed. For public forks, \`GITHUB_TOKEN\` has read-only access by GitHub policy." >> $GITHUB_STEP_SUMMARY
+            echo "To enable automatic PR creation, add a fine-grained PAT with \`contents\` and \`pull_requests\` write access as \`PAT_TOKEN\` secret." >> $GITHUB_STEP_SUMMARY
 
           else
             echo "## ❌ Sync Failed" >> $GITHUB_STEP_SUMMARY
