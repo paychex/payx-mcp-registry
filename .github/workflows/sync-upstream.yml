@@ -16,9 +16,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
 
       - name: Configure git
         run: |
@@ -86,15 +83,21 @@ jobs:
             else
 
               PR_BODY="## Automated upstream sync\n\nThis PR brings in the latest changes from [\`modelcontextprotocol/registry\`](https://github.com/modelcontextprotocol/registry).\n\n**There are merge conflicts that need manual resolution.**\n\n### To resolve locally:\n\n\`\`\`bash\ngit fetch origin\ngit checkout sync/upstream-$(date +%Y%m%d)\ngit merge main\n# Resolve conflicts, then:\ngit add .\ngit commit\ngit push\n\`\`\`\n\nOr resolve directly in the GitHub UI using the conflict editor."
-              PR_URL=$(gh pr create \
+              
+              if PR_URL=$(gh pr create \
                 --title "Sync with upstream $(date +%Y-%m-%d)" \
                 --body "$PR_BODY" \
                 --base main \
-                --head "$BRANCH_NAME")
-
-              echo "status=pr_created" >> $GITHUB_OUTPUT
-              echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
-              echo "⚠️ Conflicts detected — PR created: $PR_URL"
+                --head "$BRANCH_NAME" 2>&1); then
+                echo "status=pr_created" >> $GITHUB_OUTPUT
+                echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+                echo "⚠️ Conflicts detected — PR created: $PR_URL"
+              else
+                echo "status=branch_created" >> $GITHUB_OUTPUT
+                echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+                echo "⚠️ Branch created but PR creation failed (likely token permissions)"
+                echo "⚠️ Create PR manually: https://github.com/${{ github.repository }}/pull/new/$BRANCH_NAME"
+              fi
             fi
             
             # Exit successfully - conflicts are handled via PR
@@ -122,6 +125,15 @@ jobs:
           elif [ "${{ steps.sync.outputs.status }}" == "pr_exists" ]; then
             echo "## ℹ️ Existing Sync PR Updated" >> $GITHUB_STEP_SUMMARY
             echo "PR #${{ steps.sync.outputs.pr_number }} branch has been updated with latest upstream." >> $GITHUB_STEP_SUMMARY
+
+          elif [ "${{ steps.sync.outputs.status }}" == "branch_created" ]; then
+            echo "## ⚠️ Branch Created - Manual PR Needed" >> $GITHUB_STEP_SUMMARY
+            echo "Merge conflicts detected. Branch \`${{ steps.sync.outputs.branch_name }}\` created." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Action required:** Create PR manually at:" >> $GITHUB_STEP_SUMMARY
+            echo "https://github.com/${{ github.repository }}/pull/new/${{ steps.sync.outputs.branch_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "_Note: Automatic PR creation failed due to token permissions_" >> $GITHUB_STEP_SUMMARY
 
           else
             echo "## ❌ Sync Failed" >> $GITHUB_STEP_SUMMARY
