@@ -8,7 +8,7 @@ Also see:
 
 ## Browse the Complete Schema
 
-**📋 View the full specification interactively**: Open [server.schema.json](./server.schema.json) in a schema viewer like [json-schema.app](https://json-schema.app/view/%23?url=https%3A%2F%2Fstatic.modelcontextprotocol.io%2Fschemas%2F2025-09-29%2Fserver.schema.json).
+**📋 View the full specification interactively**: Open [server.schema.json](./draft/server.schema.json) in a schema viewer like [json-schema.app](https://json-schema.app/view/%23?url=https%3A%2F%2Fstatic.modelcontextprotocol.io%2Fschemas%2F2025-09-29%2Fserver.schema.json).
 
 The schema contains all field definitions, validation rules, examples, and detailed descriptions.
 
