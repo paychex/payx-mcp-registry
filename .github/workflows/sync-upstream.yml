@@ -16,8 +16,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0  # Fetch full history to enable merge-base checks
+          persist-credentials: true
 
       - name: Configure git
         run: |
@@ -111,7 +112,7 @@ jobs:
             exit 0
           fi
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
         if: always()
@@ -140,8 +141,7 @@ jobs:
             echo "**Action required:** Create PR manually at:" >> $GITHUB_STEP_SUMMARY
             echo "https://github.com/${{ github.repository }}/compare/main...${{ steps.sync.outputs.branch_name }}?expand=1" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Note:** Automatic PR creation failed. For public forks, \`GITHUB_TOKEN\` has read-only access by GitHub policy." >> $GITHUB_STEP_SUMMARY
-            echo "To enable automatic PR creation, add a fine-grained PAT with \`contents\` and \`pull_requests\` write access as \`PAT_TOKEN\` secret." >> $GITHUB_STEP_SUMMARY
+            echo "**Note:** Automatic PR creation failed. Check workflow permissions or gh CLI authentication." >> $GITHUB_STEP_SUMMARY
 
           else
             echo "## ❌ Sync Failed" >> $GITHUB_STEP_SUMMARY
