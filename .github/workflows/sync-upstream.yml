@@ -58,25 +58,13 @@ jobs:
         run: |
           git checkout main
 
-          # Fast path: clean merge directly to main
-          if git merge upstream/main --no-edit; then
-            if git push origin main; then
-              echo "status=success" >> $GITHUB_OUTPUT
-              echo "✅ Successfully synced with upstream"
-            else
-              echo "status=push_failed" >> $GITHUB_OUTPUT
-              echo "⚠️ Push failed"
-              exit 1
-            fi
-          else
-            # Conflicts — abort merge, create a PR instead
-            git merge --abort
-
+          # Helper: create a sync branch from upstream/main and open a PR
+          create_sync_pr() {
+            local reason="$1"
             BRANCH_NAME="sync/upstream-$(date +%Y%m%d)"
             git checkout -b "$BRANCH_NAME" upstream/main
             git push -f origin "$BRANCH_NAME"
 
-            # Check if a sync PR already exists
             EXISTING_PR=$(gh pr list \
               --repo "${{ github.repository }}" \
               --head "$BRANCH_NAME" \
@@ -89,8 +77,8 @@ jobs:
               echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
               echo "ℹ️ Sync PR #$EXISTING_PR already exists — branch updated"
             else
-              PR_BODY="## Automated upstream sync\n\nThis PR brings in the latest changes from [\`modelcontextprotocol/registry\`](https://github.com/modelcontextprotocol/registry).\n\n**There are merge conflicts that need manual resolution.**\n\n### To resolve locally:\n\n\`\`\`bash\ngit fetch origin\ngit checkout $BRANCH_NAME\ngit merge main\n# Resolve conflicts, then:\ngit add .\ngit commit\ngit push\n\`\`\`\n\nOr resolve directly in the GitHub UI using the conflict editor."
-              
+              PR_BODY="## Automated upstream sync\n\nThis PR brings in the latest changes from [\`modelcontextprotocol/registry\`](https://github.com/modelcontextprotocol/registry).\n\n**Reason:** $reason\n\n### To merge locally:\n\n\`\`\`bash\ngit fetch origin\ngit checkout $BRANCH_NAME\ngit merge main\n# Resolve any conflicts, then:\ngit add .\ngit commit\ngit push\n\`\`\`\n\nOr merge directly via the GitHub UI."
+
               if PR_URL=$(gh pr create \
                 --repo "${{ github.repository }}" \
                 --title "Sync with upstream $(date +%Y-%m-%d)" \
@@ -99,7 +87,7 @@ jobs:
                 --head "$BRANCH_NAME" 2>&1); then
                 echo "status=pr_created" >> $GITHUB_OUTPUT
                 echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
-                echo "⚠️ Conflicts detected — PR created: $PR_URL"
+                echo "⚠️ $reason — PR created: $PR_URL"
               else
                 echo "status=branch_created" >> $GITHUB_OUTPUT
                 echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
@@ -107,7 +95,32 @@ jobs:
                 echo "⚠️ Create PR manually: https://github.com/${{ github.repository }}/compare/main...$BRANCH_NAME?expand=1"
               fi
             fi
-            
+          }
+
+          # Fast path: clean merge directly to main
+          if git merge upstream/main --no-edit; then
+            # Check if the merge brought in any .github/workflows/ file changes.
+            # GITHUB_TOKEN is unconditionally blocked from pushing workflow files
+            # (GitHub platform restriction — no permission scope can override this).
+            # Route to a PR instead so a human can review and merge.
+            if git diff --name-only origin/main HEAD | grep -q '^\.github/workflows/'; then
+              echo "⚠️ Upstream changes include workflow files — GITHUB_TOKEN cannot push these"
+              echo "⚠️ Falling back to PR creation"
+              git reset --hard origin/main
+              create_sync_pr "Upstream changes include .github/workflows/ files, which require a PAT or manual merge (GITHUB_TOKEN cannot push workflow files)"
+            elif git push origin main; then
+              echo "status=success" >> $GITHUB_OUTPUT
+              echo "✅ Successfully synced with upstream"
+            else
+              # Push rejected for another reason (branch protection, etc.)
+              echo "⚠️ Direct push to main rejected — falling back to PR"
+              git reset --hard origin/main
+              create_sync_pr "Direct push was rejected (branch protection or other policy)"
+            fi
+          else
+            # Conflicts — abort merge, create a PR instead
+            git merge --abort
+            create_sync_pr "Merge conflicts that need manual resolution"
             # Exit successfully - conflicts are handled via PR
             exit 0
           fi
