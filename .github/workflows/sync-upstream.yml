@@ -16,7 +16,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Use PAT_TOKEN (fine-grained PAT with workflows permission) if available,
+          # fall back to GITHUB_TOKEN (which cannot push .github/workflows/ changes)
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           fetch-depth: 0  # Fetch full history to enable merge-base checks
           persist-credentials: true
 
@@ -58,11 +60,12 @@ jobs:
         run: |
           git checkout main
 
-          # Helper: create a sync branch from upstream/main and open a PR
+          # Helper: create a sync branch from upstream/main and open a PR for conflicts
           create_sync_pr() {
             local reason="$1"
             BRANCH_NAME="sync/upstream-$(date +%Y%m%d)"
             git checkout -b "$BRANCH_NAME" upstream/main
+
             git push -f origin "$BRANCH_NAME"
 
             EXISTING_PR=$(gh pr list \
@@ -99,20 +102,11 @@ jobs:
 
           # Fast path: clean merge directly to main
           if git merge upstream/main --no-edit; then
-            # Check if the merge brought in any .github/workflows/ file changes.
-            # GITHUB_TOKEN is unconditionally blocked from pushing workflow files
-            # (GitHub platform restriction — no permission scope can override this).
-            # Route to a PR instead so a human can review and merge.
-            if git diff --name-only origin/main HEAD | grep -q '^\.github/workflows/'; then
-              echo "⚠️ Upstream changes include workflow files — GITHUB_TOKEN cannot push these"
-              echo "⚠️ Falling back to PR creation"
-              git reset --hard origin/main
-              create_sync_pr "Upstream changes include .github/workflows/ files, which require a PAT or manual merge (GITHUB_TOKEN cannot push workflow files)"
-            elif git push origin main; then
+            if git push origin main; then
               echo "status=success" >> $GITHUB_OUTPUT
-              echo "✅ Successfully synced with upstream"
+              echo "✅ Successfully synced with upstream (including any .github/workflows/ changes)"
             else
-              # Push rejected for another reason (branch protection, etc.)
+              # Push rejected (branch protection, etc.) — fall back to PR
               echo "⚠️ Direct push to main rejected — falling back to PR"
               git reset --hard origin/main
               create_sync_pr "Direct push was rejected (branch protection or other policy)"
