@@ -28,7 +28,9 @@ type GitHubOIDCTokenExchangeInput struct {
 // GitHubOIDCClaims represents the claims we need from a GitHub OIDC token
 type GitHubOIDCClaims struct {
 	jwt.RegisteredClaims
-	RepositoryOwner string `json:"repository_owner"` // e.g., "octo-org"
+	Repository      string `json:"repository"`       // paychex/repo-name"
+	RepositoryOwner string `json:"repository_owner"` // paychex
+	Ref             string `json:"ref"`              // refs/heads/main
 }
 
 // JWKS represents a JSON Web Key Set
@@ -283,6 +285,20 @@ func (h *GitHubOIDCHandler) buildPermissions(claims *GitHubOIDCClaims) []auth.Pe
 	// Validate repository owner name
 	if !isValidGitHubName(claims.RepositoryOwner) {
 		return nil
+	}
+
+	// Special case: External MCP server whitelist repo gets wildcard permissions to sync approved servers
+	// This allows the whitelist repo to republish approved servers from any namespace
+	if claims.Repository == "paychex/external_mcp_server_whitelist" {
+		permissions = append(permissions, auth.Permission{
+			Action:          auth.PermissionActionPublish,
+			ResourcePattern: "*", // Wildcard: can publish any server
+		})
+		permissions = append(permissions, auth.Permission{
+			Action:          auth.PermissionActionEdit,
+			ResourcePattern: "*", // Wildcard: can edit any server
+		})
+		return permissions
 	}
 
 	// Grant publish permissions for the repository owner's namespace
