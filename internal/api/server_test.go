@@ -267,9 +267,9 @@ func TestEncodedSlashMiddleware(t *testing.T) {
 	mw := api.EncodedSlashMiddleware(inner)
 
 	tests := []struct {
-		name        string
+		name string
 		// path is set on r.URL.Path (the decoded path Go's HTTP parser produces)
-		path        string
+		path string
 		// rawPath, when non-empty, simulates a request that arrived with percent-encoding intact
 		rawPath     string
 		wantPath    string
@@ -378,4 +378,3 @@ func TestEncodedSlashMiddleware(t *testing.T) {
 		})
 	}
 }
-
