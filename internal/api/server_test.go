@@ -254,3 +254,127 @@ func TestTrailingSlashMiddleware(t *testing.T) {
 		})
 	}
 }
+
+func TestEncodedSlashMiddleware(t *testing.T) {
+	// Inner handler captures the path and rawPath it receives after middleware transforms them.
+	var gotPath, gotRawPath string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotRawPath = r.URL.RawPath
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := api.EncodedSlashMiddleware(inner)
+
+	tests := []struct {
+		name string
+		// path is set on r.URL.Path (the decoded path Go's HTTP parser produces)
+		path string
+		// rawPath, when non-empty, simulates a request that arrived with percent-encoding intact
+		rawPath     string
+		wantPath    string
+		wantRawPath string
+	}{
+		// ── Envoy-decoded paths: RawPath is empty, literal "/" appears in serverName ──────────
+		{
+			name:        "v0 GET server version - Envoy decoded %2F",
+			path:        "/v0/servers/com.example/my-server/versions/latest",
+			wantPath:    "/v0/servers/com.example%2Fmy-server/versions/latest",
+			wantRawPath: "/v0/servers/com.example%2Fmy-server/versions/latest",
+		},
+		{
+			name:        "v0.1 GET server version - Envoy decoded %2F",
+			path:        "/v0.1/servers/com.example/my-server/versions/latest",
+			wantPath:    "/v0.1/servers/com.example%2Fmy-server/versions/latest",
+			wantRawPath: "/v0.1/servers/com.example%2Fmy-server/versions/latest",
+		},
+		{
+			name:        "v0.1 GET specific version - Envoy decoded %2F",
+			path:        "/v0.1/servers/com.cortexapps/cortex-mcp/versions/1.2.3",
+			wantPath:    "/v0.1/servers/com.cortexapps%2Fcortex-mcp/versions/1.2.3",
+			wantRawPath: "/v0.1/servers/com.cortexapps%2Fcortex-mcp/versions/1.2.3",
+		},
+		{
+			name:        "v0.1 GET all versions list - Envoy decoded %2F",
+			path:        "/v0.1/servers/com.example/my-server/versions",
+			wantPath:    "/v0.1/servers/com.example%2Fmy-server/versions",
+			wantRawPath: "/v0.1/servers/com.example%2Fmy-server/versions",
+		},
+		{
+			name:        "v0.1 PATCH version status - Envoy decoded %2F",
+			path:        "/v0.1/servers/com.example/my-server/versions/1.0.0/status",
+			wantPath:    "/v0.1/servers/com.example%2Fmy-server/versions/1.0.0/status",
+			wantRawPath: "/v0.1/servers/com.example%2Fmy-server/versions/1.0.0/status",
+		},
+		{
+			name:        "v0.1 PATCH server status - Envoy decoded %2F",
+			path:        "/v0.1/servers/com.example/my-server/status",
+			wantPath:    "/v0.1/servers/com.example%2Fmy-server/status",
+			wantRawPath: "/v0.1/servers/com.example%2Fmy-server/status",
+		},
+		{
+			name:        "serverName with dots and underscores - Envoy decoded %2F",
+			path:        "/v0.1/servers/io.github.acme/my_tool-v2/versions/latest",
+			wantPath:    "/v0.1/servers/io.github.acme%2Fmy_tool-v2/versions/latest",
+			wantRawPath: "/v0.1/servers/io.github.acme%2Fmy_tool-v2/versions/latest",
+		},
+		// ── Properly encoded paths: RawPath set, should pass through unchanged ────────────────
+		{
+			name:        "already encoded %2F in RawPath - pass through unchanged",
+			path:        "/v0.1/servers/com.example/my-server/versions/latest",
+			rawPath:     "/v0.1/servers/com.example%2Fmy-server/versions/latest",
+			wantPath:    "/v0.1/servers/com.example/my-server/versions/latest",
+			wantRawPath: "/v0.1/servers/com.example%2Fmy-server/versions/latest",
+		},
+		// ── Paths with no serverName - pass through unchanged ─────────────────────────────────
+		{
+			name:        "list servers path - no serverName, pass through",
+			path:        "/v0/servers",
+			wantPath:    "/v0/servers",
+			wantRawPath: "",
+		},
+		{
+			name:        "list servers with query - no serverName, pass through",
+			path:        "/v0/servers?cursor=abc",
+			wantPath:    "/v0/servers",
+			wantRawPath: "",
+		},
+		{
+			name:        "non-server path - pass through unchanged",
+			path:        "/v0/health",
+			wantPath:    "/v0/health",
+			wantRawPath: "",
+		},
+		{
+			name:        "root path - pass through unchanged",
+			path:        "/",
+			wantPath:    "/",
+			wantRawPath: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotPath = ""
+			gotRawPath = ""
+
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			if tt.rawPath != "" {
+				req.URL.RawPath = tt.rawPath
+			}
+			w := httptest.NewRecorder()
+
+			mw.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Errorf("expected status 200, got %d", w.Code)
+			}
+			if gotPath != tt.wantPath {
+				t.Errorf("URL.Path:\n  got  %q\n  want %q", gotPath, tt.wantPath)
+			}
+			if gotRawPath != tt.wantRawPath {
+				t.Errorf("URL.RawPath:\n  got  %q\n  want %q", gotRawPath, tt.wantRawPath)
+			}
+		})
+	}
+}
