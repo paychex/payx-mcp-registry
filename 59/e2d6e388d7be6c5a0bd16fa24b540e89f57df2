@@ -1,0 +1,23 @@
+internal/validators/constants.go
+  s_e6eb9a7222a53f::t_e212e307f0f853 39-41
+internal/validators/utils.go
+  s_e6eb9a7222a53f::t_e212e307f0f853 11-18,28-29
+internal/validators/validators_test.go
+  s_e6eb9a7222a53f::t_e212e307f0f853 289-346
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "59e2d6e388d7be6c5a0bd16fa24b540e89f57df2",
+  "prompts": {},
+  "sessions": {
+    "s_e6eb9a7222a53f": {
+      "agent_id": {
+        "tool": "mock_ai",
+        "id": "ai-thread-1778268752037719230",
+        "model": "unknown"
+      },
+      "human_author": "smsriniv <smsrinivasan@paychex.com>"
+    }
+  }
+}
