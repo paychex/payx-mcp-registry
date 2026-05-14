@@ -8,10 +8,14 @@ import (
 
 var (
 	// Regular expressions for validating repository URLs
-	// These regex patterns ensure the URL is in the format of a valid GitHub or GitLab repository
-	// For example:	// - GitHub: https://github.com/user/repo
-	githubURLRegex = regexp.MustCompile(`^https?://(www\.)?github\.com/[\w.-]+/[\w.-]+/?$`)
-	gitlabURLRegex = regexp.MustCompile(`^https?://(www\.)?gitlab\.com/[\w.-]+/[\w.-]+/?$`)
+	// These regex patterns ensure the URL is in the format of a valid GitHub, GitLab, or Bitbucket repository
+	// For example:
+	// - GitHub: https://github.com/user/repo
+	// - GitLab: https://gitlab.com/user/repo
+	// - Bitbucket Server (on-premise): https://host/projects/KEY/repos/slug or https://host/users/user/repos/slug
+	githubURLRegex          = regexp.MustCompile(`^https?://(www\.)?github\.com/[\w.-]+/[\w.-]+/?$`)
+	gitlabURLRegex          = regexp.MustCompile(`^https?://(www\.)?gitlab\.com/[\w.-]+/[\w.-]+/?$`)
+	bitbucketServerURLRegex = regexp.MustCompile(`^https?://[\w.-]+(:\d+)?/(projects|users)/[\w.-]+/repos/[\w.-]+(/.*)?$`)
 )
 
 // IsValidRepositoryURL checks if the given URL is valid for the specified repository source
@@ -21,6 +25,8 @@ func IsValidRepositoryURL(source RepositorySource, url string) bool {
 		return githubURLRegex.MatchString(url)
 	case SourceGitLab:
 		return gitlabURLRegex.MatchString(url)
+	case SourceBitbucket:
+		return bitbucketServerURLRegex.MatchString(url)
 	}
 	return false
 }

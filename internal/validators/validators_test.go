@@ -288,8 +288,64 @@ func TestValidate(t *testing.T) {
 				Name:        "com.example/test-server",
 				Description: "A test server",
 				Repository: &model.Repository{
-					URL:    "https://bitbucket.org/owner/repo",
-					Source: "bitbucket", // Not in validSources
+					URL:    "https://svn.example.com/repos/my-project",
+					Source: "svn", // Not in validSources
+				},
+				Version: "1.0.0",
+			},
+			expectedError: validators.ErrInvalidRepositoryURL.Error(),
+		},
+		{
+			name: "server with Bitbucket Cloud URL (not supported - on-premise only)",
+			serverDetail: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "com.example/test-server",
+				Description: "A test server",
+				Repository: &model.Repository{
+					URL:    "https://bitbucket.org/myworkspace/my-mcp-server",
+					Source: "bitbucket",
+				},
+				Version: "1.0.0",
+			},
+			expectedError: validators.ErrInvalidRepositoryURL.Error(),
+		},
+		{
+			name: "server with valid Bitbucket Server URL (user repo)",
+			serverDetail: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "com.example/test-server",
+				Description: "A test server",
+				Repository: &model.Repository{
+					URL:    "https://code.paychex.com/users/oatesmen/repos/rapiddesignmcp/browse",
+					Source: "bitbucket",
+				},
+				Version: "1.0.0",
+			},
+			expectedError: "",
+		},
+		{
+			name: "server with valid Bitbucket Server URL (project repo)",
+			serverDetail: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "com.example/test-server",
+				Description: "A test server",
+				Repository: &model.Repository{
+					URL:    "https://bitbucket.example.com/projects/AIPLATFORM/repos/my-mcp-server/browse",
+					Source: "bitbucket",
+				},
+				Version: "1.0.0",
+			},
+			expectedError: "",
+		},
+		{
+			name: "server with invalid Bitbucket URL format",
+			serverDetail: apiv0.ServerJSON{
+				Schema:      model.CurrentSchemaURL,
+				Name:        "com.example/test-server",
+				Description: "A test server",
+				Repository: &model.Repository{
+					URL:    "https://bitbucket.org/onlyworkspace", // Missing repo slug
+					Source: "bitbucket",
 				},
 				Version: "1.0.0",
 			},
