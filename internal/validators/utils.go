@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+const (
+	schemeHTTP  = "http"
+	schemeHTTPS = "https"
+)
+
 var (
 	// Regular expressions for validating repository URLs
 	// These regex patterns ensure the URL is in the format of a valid GitHub, GitLab, or Bitbucket repository
@@ -58,8 +63,8 @@ func replaceTemplateVariables(rawURL string) string {
 		"{host}":     "example.com",
 		"{port}":     "8080",
 		"{path}":     "api",
-		"{protocol}": "http",
-		"{scheme}":   "http",
+		"{protocol}": schemeHTTP,
+		"{scheme}":   schemeHTTP,
 	}
 
 	result := rawURL
@@ -92,7 +97,7 @@ func IsValidURL(rawURL string) bool {
 	}
 
 	// Check if scheme is present (http or https)
-	if u.Scheme != "http" && u.Scheme != "https" {
+	if u.Scheme != schemeHTTP && u.Scheme != schemeHTTPS {
 		return false
 	}
 
@@ -159,7 +164,7 @@ func IsValidRemoteURL(rawURL string) bool {
 		return false
 	}
 
-	if u.Scheme != "https" {
+	if u.Scheme != schemeHTTPS {
 		return false
 	}
 
