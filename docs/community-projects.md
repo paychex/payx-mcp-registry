@@ -32,10 +32,12 @@ Self-hostable servers that implement the MCP Registry API specification.
 - [MCP Registry Cheat Sheet](https://github.com/subbyte/mcp-registry-cheatsheet) - MCP Registry Cheat Sheet for MCP server developers, client developers, and registry admin
 - [MCP Registry Remote MCP Server](https://github.com/jaw9c/mcp-registry-mcp) - Open Remote MCP server for the Registry at `https://registry-mcp.remote-mcp.com`
 - [MCP Server for MCP Registry](https://github.com/formulahendry/mcp-server-mcp-registry) - MCP Server to discover and search for available MCP servers in the registry
+- [MCP Verify](https://mcpverify.ai) - The rating layer for AI agents: free A to F grades for remote MCP servers, each computed from its own sealed record. 
 - [mcp-insights](https://github.com/joelverhagen/mcp-insights/) - Analytics and insights for the MCP Registry
 - [mcp-registry-cli](https://pypi.org/project/mcp-registry-cli/) - CLI tool to navigate the MCP registry servers
 - [mcpscore](https://mcpscore.dev) - Deterministic auditor for MCP servers: 100+ static checks across protocol conformance, tool and schema quality, security posture, and spec readiness, scored 0–100, with a web UI, CLI, and GitHub Action for CI ([source code](https://github.com/mcp-box/mcpscore)).
 - [OtherVibes/mcp-publish-action](https://github.com/OtherVibes/mcp-publish-action) - GitHub Action for publishing MCP servers to the official registry
+- [PlugVet](https://plugvet.com) - Free directory that grades MCP servers from the official MCP Registry, plus Claude Code skills and plugins, from A to F on eight automated hygiene checks (permissions, install and update, network, secrets, agent instructions, obfuscation, licence, maintainer activity), showing the evidence and check date for each entry. A hygiene screen, not a security guarantee.
 - [polygraph](https://polygraph.so) - Independent behavioral security grades (A–F) for MCP servers from an open, reproducible harness, published as an adoption-ranked index with per-server reports
 - [PulseFeed MCP Drift Watch](https://pulsefeed.dev/mcp/drift) - Daily external diff of the whole registry population, recording what changed in a server *after* it was listed: package ownership transferred, install script added in a later version, repository removed, package unpublished, a removed name republished by someone else. Free JSON/RSS feed filterable to your own packages, a README badge, and webhook alerts; series runs from 2026-07-30 and each day's manifest is timestamped into Bitcoin.
 
